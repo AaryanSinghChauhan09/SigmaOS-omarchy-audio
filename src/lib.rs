@@ -12,6 +12,7 @@ use std::fmt;
 
 /// Device kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum DeviceKind {
     /// Output (playback) — speakers/headphones.
     Sink,
@@ -35,7 +36,7 @@ impl DeviceKind {
 }
 
 /// An audio device (sink or source).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AudioDevice {
     /// Stable id (e.g. PipeWire object serial or ALSA card/device).
     pub id: u32,
@@ -222,6 +223,34 @@ impl OmarchyAudio {
     }
 
     /// Human-readable status line for the default device of a kind.
+    /// Persist device state (volume/mute/default) to JSON.
+    pub fn save_to(&self, path: &std::path::Path) -> Result<(), String> {
+        #[derive(serde::Serialize, serde::Deserialize)]
+        struct Disk { devices: Vec<AudioDevice>, next_id: u32 }
+        let d = Disk { devices: self.devices.values().cloned().collect(), next_id: self.next_id };
+        let j = serde_json::to_string_pretty(&d).map_err(|e| e.to_string())?;
+        if let Some(p) = path.parent() { std::fs::create_dir_all(p).map_err(|e| e.to_string())?; }
+        std::fs::write(path, j).map_err(|e| e.to_string())
+    }
+
+    pub fn load_from(path: &std::path::Path) -> Result<Self, String> {
+        #[derive(serde::Serialize, serde::Deserialize)]
+        struct Disk { devices: Vec<AudioDevice>, next_id: u32 }
+        let txt = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        let d: Disk = serde_json::from_str(&txt).map_err(|e| e.to_string())?;
+        let mut m = Self::new();
+        m.devices.clear();
+        for dev in d.devices { m.devices.insert(dev.id, dev); }
+        m.next_id = d.next_id;
+        Ok(m)
+    }
+
+    pub fn state_path() -> std::path::PathBuf {
+        if let Ok(p) = std::env::var("SIGMAOS_AUDIO_FILE") { return std::path::PathBuf::from(p); }
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+        std::path::PathBuf::from(home).join(".local/share/sigmaos/audio.json")
+    }
+
     pub fn status_line(&self, kind: DeviceKind) -> String {
         match self.default_device(kind) {
             Some(d) => format!(

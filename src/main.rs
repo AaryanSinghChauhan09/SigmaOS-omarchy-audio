@@ -39,7 +39,16 @@ fn usage() -> ! {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() { usage(); }
-    let mut audio = seed();
+    let state = OmarchyAudio::state_path();
+    // load persisted device state; seed demo devices on first run
+    let mut audio = OmarchyAudio::load_from(&state).unwrap_or_else(|_| {
+        let mut m = OmarchyAudio::new();
+        m.add_device("Built-in Audio Analog Stereo", DeviceKind::Sink).unwrap();
+        m.add_device("USB Headset Analog Stereo", DeviceKind::Sink).unwrap();
+        m.add_device("HDMI Output", DeviceKind::Sink).unwrap();
+        m.add_device("Internal Microphone", DeviceKind::Source).unwrap();
+        m
+    });
     let cmd = args[0].as_str();
     let rest = &args[1..];
 
@@ -97,8 +106,10 @@ fn main() {
         _ => usage(),
     };
 
-    if let Err(e) = result {
-        eprintln!("omarchy-audio: {e}");
-        exit(1);
+    match result {
+        Ok(()) => {
+            if let Err(e) = audio.save_to(&state) { eprintln!("omarchy-audio: warn: save: {e}"); }
+        }
+        Err(e) => { eprintln!("omarchy-audio: {e}"); exit(1); }
     }
 }
