@@ -12,5 +12,5 @@ depends_on = ["SigmaOS-system"]
 
 [maturity]
 status = "Implemented"
-test_evidence = "Compiles and passes AAA unit tests"
-next_milestone = "Hardware and runtime integration"
+test_evidence = "cargo test --offline: 8 lib + 1 integration pass; real PipeWire-style audio manager (sinks/sources, volume 0-150, mute, default, cycle) + working CLI (status/get/set/adjust/mute/toggle/cycle/default)"
+next_milestone = "PipeWire/WirePlumber backend binding"
